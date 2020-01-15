@@ -16,56 +16,72 @@ namespace DMChemParser
         static readonly Dictionary<char, DMToken> singleCharacterTokens = new Dictionary<char, DMToken>
         {
             ['='] = DMToken.Equals,
+            ['!'] = DMToken.Exclamation,
             ['('] = DMToken.OpenParen,
             [')'] = DMToken.CloseParen,
+            ['['] = DMToken.OpenBracket,
+            [']'] = DMToken.CloseBracket,
             [','] = DMToken.Comma,
             ['.'] = DMToken.Dot,
+            ['+'] = DMToken.Plus,
+            ['-'] = DMToken.Minus,
+            ['*'] = DMToken.Asterisk,
+            ['/'] = DMToken.Slash,
+            ['<'] = DMToken.LessThan,
+            ['>'] = DMToken.GreaterThan,
         };
 
         static readonly Dictionary<string, DMToken> keywords = new Dictionary<string, DMToken>
         {
             ["list"] = DMToken.ListKeyword,
             ["for"] = DMToken.ForKeyword,
+            ["in"] = DMToken.InKeyword,
+            ["to"] = DMToken.ToKeyword,
+            ["if"] = DMToken.IfKeyword,
+            ["else"] = DMToken.ElseKeyword,
+            ["new"] = DMToken.NewKeyword,
+            ["datum"] = DMToken.Datum,
+            ["var"] = DMToken.Var,
+            ["TRUE"] = DMToken.TrueKeyword,
+            ["FALSE"] = DMToken.FalseKeyword,
+            ["=="] = DMToken.EqualsEquals,
+            ["<="] = DMToken.LessThanEquals,
+            [">="] = DMToken.GreaterThanEquals,
             ["<="] = DMToken.LessThanEquals,
             ["++"] = DMToken.PlusPlus,
+            ["+="] = DMToken.PlusEquals,
+            ["-="] = DMToken.MinusEquals,
+            ["*="] = DMToken.AsteriskEquals,
+            ["/="] = DMToken.SlashEquals,
+            ["&"] = DMToken.Ampersand,
+            ["&&"] = DMToken.AmpersandAmpersand,
+            ["|"] = DMToken.Bar,
+            ["||"] = DMToken.BarBar,
         };
+
+        static readonly HashSet<char> stringLiteralOpeners = new HashSet<char> { '"', '\'' };
+
+        static readonly HashSet<char> whitespace = new HashSet<char> { ' ', '\t' };
 
         protected override IEnumerable<Result<DMToken>> Tokenize(TextSpan span)
         {
             var next = SkipWhiteSpace(span);
+            var lastFail = next.Location;
             while (next.HasValue)
             {
-                next = SkipWhiteSpace(next);
-                if(!next.HasValue){
+                if (SkipWhiteSpace(ref next, DMToken.LeadWhitespace, out var whitespace))
+                {
+                    yield return whitespace;
+                }
+                if (!next.HasValue)
+                {
                     yield break;
                 }
-                if (next.Value == '/')
+                if (next.Location.Length >= 2 && next.Location.First(2).ToString() == "//")
                 {
-                    var pos = next.Location;
-                    next = next.Remainder.ConsumeChar();
-                    if (next.Value == '/')
+                    while (next.Value != '\n')
                     {
-                        while (next.Value != '\n')
-                        {
-                            next = next.Remainder.ConsumeChar();
-                        }
-                    }
-                    else
-                    {
-                        yield return Result.Value(DMToken.Slash, pos, next.Location);
-                        if (TryIndentifier(ref next, out var identifier))
-                        {
-                            yield return identifier;
-                        }
-                        while (next.Value == '/')
-                        {
-                            yield return Result.Value(DMToken.Slash, next.Location, next.Remainder);
-                            next = next.Remainder.ConsumeChar();
-                            if (TryIndentifier(ref next, out identifier))
-                            {
-                                yield return identifier;
-                            }
-                        }
+                        next = next.Remainder.ConsumeChar();
                     }
                 }
                 else if (TryKeyword(ref next, out var keyword))
@@ -81,18 +97,9 @@ namespace DMChemParser
                     yield return Result.Value(charToken, next.Location, next.Remainder);
                     next = next.Remainder.ConsumeChar();
                 }
-                else if (next.Value == '"')
+                else if (TryStringLiteral(ref next, out var stringLiteral))
                 {
-                    var subPath = new StringBuilder();
-                    var subPathStart = next.Location;
-                    next = next.Remainder.ConsumeChar();
-                    while (next.Value != '"')
-                    {
-                        subPath.Append(next.Value);
-                        next = next.Remainder.ConsumeChar();
-                    }
-                    next = next.Remainder.ConsumeChar();
-                    yield return Result.Value(DMToken.StringLiteral, subPathStart, next.Location);
+                    yield return stringLiteral;
                 }
                 else if (char.IsDigit(next.Value))
                 {
@@ -100,16 +107,33 @@ namespace DMChemParser
                     next = integer.Remainder.ConsumeChar();
                     yield return Result.Value(DMToken.NumericLiteral, integer.Location, integer.Remainder);
                 }
+                else if (lastFail == next.Location)
+                {
+                    break;
+                }
+                else
+                {
+                    lastFail = next.Location;
+                }
+                if (SkipWhiteSpace(ref next, DMToken.TrailWhitespace, out whitespace))
+                {
+                    yield return whitespace;
+                }
+                if (next.Value == '\n')
+                {
+                    yield return Result.Value(DMToken.Eol, next.Location, next.Remainder);
+                    next = next.Remainder.ConsumeChar();
+                }
             }
         }
 
         private static bool TryIndentifier(ref Result<char> next, out Result<DMToken> value)
         {
-            if (next.HasValue && char.IsLetter(next.Value))
+            if (next.HasValue && (char.IsLetter(next.Value) || next.Value == '_'))
             {
                 var identifierStart = next.Location;
                 bool firstLetter = false;
-                while (char.IsLetter(next.Value) || (firstLetter && (next.Value == '_' || char.IsDigit(next.Value))))
+                while (char.IsLetter(next.Value) || next.Value == '_' || (firstLetter && char.IsDigit(next.Value)))
                 {
                     next = next.Remainder.ConsumeChar();
                     firstLetter = true;
@@ -123,13 +147,17 @@ namespace DMChemParser
 
         private static bool TryKeyword(ref Result<char> next, out Result<DMToken> value)
         {
-            var maxLength = Math.Min(next.Location.Length, keywords.Max(keyword => keyword.Key.Length));
+            var remainingLength = next.Location.Length;
+            var maxWordLength = Math.Min(remainingLength, keywords.Max(keyword => keyword.Key.Length));
+            var fetchLength = Math.Min(remainingLength, maxWordLength + 1);
             var start = next.Location;
 
-            for (int i = 1; i < maxLength; i++)
+            for (int i = fetchLength - 1; i > 0; i--)
             {
-                var text = next.Location.First(i);
-                if (keywords.TryGetValue(text.ToString(), out var keyword))
+                var text = next.Location.First(i + 1).ToString();
+                var wordText = text.Substring(0, i);
+                var lastChar = text.Last();
+                if (keywords.TryGetValue(wordText, out var keyword) && (i == fetchLength || !char.IsLetter(lastChar)))
                 {
                     for (int j = 0; j < i; j++)
                     {
@@ -143,14 +171,41 @@ namespace DMChemParser
             return false;
         }
 
-        private static Result<char> SkipWhiteSpace(Result<char> next)
+        private static bool TryStringLiteral(ref Result<char> next, out Result<DMToken> value)
         {
-            if (char.IsWhiteSpace(next.Value))
+            if (stringLiteralOpeners.Contains(next.Value))
             {
+                var opener = next.Value;
+                var subPath = new StringBuilder();
+                var subPathStart = next.Location;
                 next = next.Remainder.ConsumeChar();
+                while (next.Value != opener)
+                {
+                    subPath.Append(next.Value);
+                    next = next.Remainder.ConsumeChar();
+                }
+                next = next.Remainder.ConsumeChar();
+                value = Result.Value(DMToken.StringLiteral, subPathStart, next.Location);
+                return true;
             }
+            value = default;
+            return false;
+        }
 
-            return next;
+        private static bool SkipWhiteSpace(ref Result<char> next, DMToken token, out Result<DMToken> value)
+        {
+            if (whitespace.Contains(next.Value))
+            {
+                var start = next.Location;
+                while (whitespace.Contains(next.Value))
+                {
+                    next = next.Remainder.ConsumeChar();
+                }
+                value = Result.Value(token, start, next.Location);
+                return true;
+            }
+            value = default;
+            return false;
         }
     }
 }
