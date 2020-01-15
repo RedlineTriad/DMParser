@@ -8,10 +8,15 @@ namespace DMChem.Parser
 {
     public static class DMParser
     {
+        public static readonly TokenListParser<DMToken, string> SubPath =
+            from _ in Token.EqualTo(DMToken.Slash)
+            from chars in Token.EqualTo(DMToken.Identifier)
+            select chars.Span.ToString();
+
         public static readonly TokenListParser<DMToken, string> ReferencePath =
-            (from _ in Token.EqualTo(DMToken.Slash)
-             from chars in Token.EqualTo(DMToken.Identifier)
-             select chars.Span.ToString())
+             (from rest in SubPath.AtLeastOnce()
+              from __ in Token.EqualTo(DMToken.Slash).Optional()
+              select string.Join("\n", rest))
             .AtLeastOnce().Select(p => string.Join("/", p));
 
         public static readonly TokenListParser<DMToken, string> Identifier =

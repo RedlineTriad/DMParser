@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using DMChem.Parser;
@@ -20,9 +21,15 @@ namespace DMChem
             // {
             //     Console.WriteLine($"{token.Kind.ToString().PadRight(20)} | {token.ToStringValue()}");
             // }
-            var parsed = DMParser.Object(tokens);
+            var parsed = DMParser.ObjectList(tokens);
             Console.WriteLine(parsed);
-            Console.WriteLine(parsed.Value);
+            if (parsed.ErrorPosition.HasValue)
+            {
+                var errorLine = parsed.ErrorPosition.Line;
+                var lines = recipeDM.Split('\n');
+                var countedLines = lines.Zip(Enumerable.Range(1, lines.Length + 1), (a, b) => $"{b} | {a}");
+                Console.WriteLine(string.Join('\n', countedLines.Skip(errorLine - 2).Take(3)));
+            }
         }
     }
 }
