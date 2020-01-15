@@ -1,4 +1,4 @@
-namespace DMChemParser {
+namespace DMChem.Parser {
     public enum DMToken
     {
         NumericLiteral,
@@ -20,8 +20,6 @@ namespace DMChemParser {
         Bar,
         BarBar,
         Identifier,
-        Datum,
-        Var,
         OpenParen,
         CloseParen,
         OpenBracket,

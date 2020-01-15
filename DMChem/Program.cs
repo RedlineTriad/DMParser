@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Net.Http;
 using System.Threading.Tasks;
+using DMChem.Parser;
 
-namespace DMChemParser
+namespace DMChem
 {
     class Program
     {
@@ -14,10 +15,14 @@ namespace DMChemParser
             var recipeDM = await http.GetStringAsync(recipeUri);
 
             var tokenizer = new DMTokenizer();
-            foreach (var token in tokenizer.Tokenize(recipeDM))
-            {
-                Console.WriteLine($"{token.Kind.ToString().PadRight(20)} | {token.ToStringValue()}");
-            }
+            var tokens = tokenizer.Tokenize(recipeDM);
+            // foreach (var token in tokens)
+            // {
+            //     Console.WriteLine($"{token.Kind.ToString().PadRight(20)} | {token.ToStringValue()}");
+            // }
+            var parsed = DMParser.Object(tokens);
+            Console.WriteLine(parsed);
+            Console.WriteLine(parsed.Value);
         }
     }
 }

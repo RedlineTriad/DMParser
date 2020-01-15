@@ -1,19 +1,16 @@
 using System.Linq;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Net.Http;
 using System.Text;
-using System.Threading.Tasks;
 using Superpower;
 using Superpower.Model;
 using Superpower.Parsers;
 
-namespace DMChemParser
+namespace DMChem.Parser
 {
     public class DMTokenizer : Tokenizer<DMToken>
     {
-        static readonly Dictionary<char, DMToken> singleCharacterTokens = new Dictionary<char, DMToken>
+        private static readonly Dictionary<char, DMToken> singleCharacterTokens = new Dictionary<char, DMToken>
         {
             ['='] = DMToken.Equals,
             ['!'] = DMToken.Exclamation,
@@ -31,7 +28,7 @@ namespace DMChemParser
             ['>'] = DMToken.GreaterThan,
         };
 
-        static readonly Dictionary<string, DMToken> keywords = new Dictionary<string, DMToken>
+        private static readonly Dictionary<string, DMToken> keywords = new Dictionary<string, DMToken>
         {
             ["list"] = DMToken.ListKeyword,
             ["for"] = DMToken.ForKeyword,
@@ -40,8 +37,6 @@ namespace DMChemParser
             ["if"] = DMToken.IfKeyword,
             ["else"] = DMToken.ElseKeyword,
             ["new"] = DMToken.NewKeyword,
-            ["datum"] = DMToken.Datum,
-            ["var"] = DMToken.Var,
             ["TRUE"] = DMToken.TrueKeyword,
             ["FALSE"] = DMToken.FalseKeyword,
             ["=="] = DMToken.EqualsEquals,
@@ -59,9 +54,9 @@ namespace DMChemParser
             ["||"] = DMToken.BarBar,
         };
 
-        static readonly HashSet<char> stringLiteralOpeners = new HashSet<char> { '"', '\'' };
+        private static readonly HashSet<char> stringLiteralOpeners = new HashSet<char> { '"', '\'' };
 
-        static readonly HashSet<char> whitespace = new HashSet<char> { ' ', '\t' };
+        private static readonly HashSet<char> whitespace = new HashSet<char> { ' ', '\t' };
 
         protected override IEnumerable<Result<DMToken>> Tokenize(TextSpan span)
         {
@@ -115,10 +110,7 @@ namespace DMChemParser
                 {
                     lastFail = next.Location;
                 }
-                if (SkipWhiteSpace(ref next, DMToken.TrailWhitespace, out whitespace))
-                {
-                    yield return whitespace;
-                }
+                SkipWhiteSpace(ref next, DMToken.TrailWhitespace, out _);
                 if (next.Value == '\n')
                 {
                     yield return Result.Value(DMToken.Eol, next.Location, next.Remainder);
