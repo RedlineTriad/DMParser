@@ -3,8 +3,7 @@ namespace DMChem.Parser {
     {
         NumericLiteral,
         StringLiteral,
-        TrueKeyword,
-        FalseKeyword,
+        BooleanLiteral,
         Dot,
         Slash,
         Plus,
@@ -38,6 +37,7 @@ namespace DMChem.Parser {
         IfKeyword,
         ElseKeyword,
         NewKeyword,
+        ReturnKeyword,
         Comma,
         TrailWhitespace,
         LeadWhitespace,
