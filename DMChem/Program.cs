@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Text.RegularExpressions;
+using System;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -8,32 +9,35 @@ namespace DMChem
 {
     class Program
     {
-        static readonly Uri recipeUri = new Uri("https://raw.githubusercontent.com/tgstation/tgstation/master/code/modules/reagents/chemistry/recipes/medicine.dm");
+        static readonly Uri recipeUri = new Uri("https://raw.githubusercontent.com/tgstation/tgstation/master/code/modules/reagents/chemistry/recipes/pyrotechnics.dm");
 
         static async Task Main(string[] args)
         {
             var http = new HttpClient();
             var recipeDM = await http.GetStringAsync(recipeUri);
+            var regex = new Regex(@"(?:\/[\w_]+)+\(.*?\).+?(?=\n\/datum)", RegexOptions.Singleline);
+            recipeDM = regex.Replace(recipeDM, "");
 
             var tokenizer = new DMTokenizer();
-            var tokens = tokenizer.Tokenize(string.Join("\n", recipeDM.Split('\n').Take(202)));
-            // foreach (var token in tokens)
-            // {
-            //     Console.WriteLine($"{token.Kind.ToString().PadRight(20)} | {token.ToStringValue()}");
-            // }
+            var tokens = tokenizer.Tokenize(recipeDM);
             var parsed = DMParser.ObjectList(tokens);
             if (parsed.ErrorPosition.HasValue)
             {
                 Console.WriteLine(parsed);
                 var errorLine = parsed.ErrorPosition.Line;
-                var lines = recipeDM.Split('\n');
-                var countedLines = lines.Zip(Enumerable.Range(1, lines.Length + 1), (a, b) => $"{b} | {a}");
-                Console.WriteLine(string.Join('\n', countedLines.Skip(errorLine - 2).Take(3)));
+                WriteSurrounding(recipeDM, errorLine, 3);
             }
             if (parsed.HasValue)
             {
                 WriteReactions(parsed.Value);
             }
+        }
+
+        private static void WriteSurrounding(string text, int line, int range)
+        {
+            var lines = text.Split('\n');
+            var countedLines = lines.Zip(Enumerable.Range(1, lines.Length + 1), (a, b) => $"{b} | {a}");
+            Console.WriteLine(string.Join('\n', countedLines.Skip(line - range).Take(range * 2 - 1)));
         }
 
         private static void WriteReactions(dynamic[] reactions)
@@ -44,15 +48,21 @@ namespace DMChem
                 Print($"{reaction.path}:");
                 indent++;
 
-                Print($"name: {reaction.name}");
-
-                Print("required_reagents:");
-                indent++;
-                foreach (var required in reaction.required_reagents)
+                if (DMParser.DynHas(reaction, "name"))
                 {
-                    Print($"{required.Key}: {required.Value}");
+                    Print($"name: {reaction.name}");
                 }
-                indent--;
+
+                if (DMParser.DynHas(reaction, "required_reagents"))
+                {
+                    Print("required_reagents:");
+                    indent++;
+                    foreach (var required in reaction.required_reagents)
+                    {
+                        Print($"{required.Key}: {required.Value}");
+                    }
+                    indent--;
+                }
 
                 if (DMParser.DynHas(reaction, "required_catalysts"))
                 {
@@ -67,32 +77,30 @@ namespace DMChem
 
                 if (DMParser.DynHas(reaction, "required_temp"))
                 {
-                    Print($"temperature:");
+                    Print("temperature:");
                     indent++;
-                    if (DMParser.DynHas(reaction, "is_cold_recipe"))
-                    {
-                        Print($"min: {reaction.required_temp}");
-                    }
-                    else
-                    {
-                        Print($"max: {reaction.required_temp}");
-                    }
+                    var cold = DMParser.DynHas(reaction, "is_cold_recipe");
+                    Print($"{(cold ? "min" : "max")}: {reaction.required_temp}");
                     indent--;
                 }
 
-                Print($"results:");
-                indent++;
-                foreach (var result in reaction.results)
+                if (DMParser.DynHas(reaction, "results"))
                 {
-                    Print($"{result.Key}: {result.Value}");
+                    Print("results:");
+                    indent++;
+                    foreach (var result in reaction.results)
+                    {
+                        Print($"{result.Key}: {result.Value}");
+                    }
+                    indent--;
                 }
-                indent--;
 
                 indent--;
                 Console.WriteLine();
             }
 
-            void Print(string text){
+            void Print(string text)
+            {
                 Console.WriteLine(new string(' ', indent * 2) + text);
             }
         }

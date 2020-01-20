@@ -80,6 +80,12 @@ namespace DMChem.Parser
                         next = next.Remainder.ConsumeChar();
                     }
                 }
+                else if (char.IsDigit(next.Value) || next.Value == '-' || next.Value == '+')
+                {
+                    var integer = Numerics.Integer(next.Location);
+                    next = integer.Remainder.ConsumeChar();
+                    yield return Result.Value(DMToken.NumericLiteral, integer.Location, integer.Remainder);
+                }
                 else if (TryKeyword(ref next, out var keyword))
                 {
                     yield return keyword;
@@ -97,12 +103,6 @@ namespace DMChem.Parser
                 {
                     yield return stringLiteral;
                 }
-                else if (char.IsDigit(next.Value))
-                {
-                    var integer = Numerics.Integer(next.Location);
-                    next = integer.Remainder.ConsumeChar();
-                    yield return Result.Value(DMToken.NumericLiteral, integer.Location, integer.Remainder);
-                }
                 else if (lastFail == next.Location)
                 {
                     break;
@@ -115,7 +115,10 @@ namespace DMChem.Parser
                 if (next.Value == '\n')
                 {
                     yield return Result.Value(DMToken.Eol, next.Location, next.Remainder);
-                    next = next.Remainder.ConsumeChar();
+                    while (next.HasValue && next.Value == '\n')
+                    {
+                        next = next.Remainder.ConsumeChar();
+                    }
                 }
             }
         }
