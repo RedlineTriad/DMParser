@@ -60,6 +60,10 @@ namespace DMChem.Parser {
         [Token(Category = "operator", Example = ">=")]
         GreaterThanEquals,
         [Token(Category = "operator", Example = "++")]
+        Hash,
+        [Token(Category = "keyword", Example = "#")]
+        Define,
+        [Token(Category = "keyword", Example = "define")]
         PlusPlus,
         [Token(Category = "keyword", Example = "list")]
         ListKeyword,

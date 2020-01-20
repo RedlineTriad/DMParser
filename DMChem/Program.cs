@@ -13,15 +13,17 @@ namespace DMChem
 {
     class Program
     {
-        static readonly Uri baseURI = new Uri("https://raw.githubusercontent.com/tgstation/tgstation/master/code/modules/reagents/chemistry/recipes/");
+        static readonly Uri baseURI = new Uri("https://raw.githubusercontent.com/tgstation/tgstation/master/code/modules/reagents/chemistry/reagents/");
         static readonly string[] recipes = {
-            "cat2_medicines.dm",
-            "drugs.dm",
-            "medicine.dm",
-            "others.dm",
-            "pyrotechnics.dm",
-            "slime_extracts.dm",
-            "toxins.dm",
+            "alcohol_reagents.dm",
+            //"cat2_medicine_reagents.dm",
+            //"drink_reagents.dm",
+            //"drug_reagents.dm",
+            //"food_reagents.dm",
+            //"medicine_reagents.dm",
+            //"other_reagents.dm",
+            //"pyrotechnic_reagents.dm",
+            //"toxin_reagents.dm",
             };
 
         static async Task Main(string[] args)
@@ -36,13 +38,13 @@ namespace DMChem
                 .Select(async uri => await http.GetStringAsync(uri))
                 .Select(async dmText => RemoveFunctions(await dmText))
                 .Select(async dmText => tokenizer.Tokenize(await dmText))
-                // .Select(async tokens =>
-                // {
-                //     foreach(var token in await tokens) {
-                //         Console.WriteLine($"{token.Position.Line} | {token.Kind.ToString().PadRight(15)} | {token.ToStringValue()}");
-                //     }
-                //     return await tokens;
-                // })
+                .Select(async tokens =>
+                {
+                    foreach(var token in await tokens) {
+                        Console.WriteLine($"{token.Position.Line} | {token.Kind.ToString().PadRight(15)} | {token.ToStringValue()}");
+                    }
+                    return await tokens;
+                })
                 .Select(async tokens => DMParser.ObjectList(await tokens))
                 .Select(async obj =>
                 {

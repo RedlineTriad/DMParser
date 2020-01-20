@@ -26,10 +26,12 @@ namespace DMChem.Parser
             ['/'] = DMToken.Slash,
             ['<'] = DMToken.LessThan,
             ['>'] = DMToken.GreaterThan,
+            ['#'] = DMToken.Hash,
         };
 
         private static readonly Dictionary<string, DMToken> keywords = new Dictionary<string, DMToken>
         {
+            ["define"] = DMToken.Define,
             ["list"] = DMToken.ListKeyword,
             ["for"] = DMToken.ForKeyword,
             ["in"] = DMToken.InKeyword,
@@ -91,7 +93,7 @@ namespace DMChem.Parser
                 }
                 else if (char.IsDigit(next.Value) || next.Value == '-' || next.Value == '+')
                 {
-                    var integer = Numerics.Integer(next.Location);
+                    var integer = Numerics.Decimal(next.Location);
                     next = integer.Remainder.ConsumeChar();
                     yield return Result.Value(DMToken.NumericLiteral, integer.Location, integer.Remainder);
                 }

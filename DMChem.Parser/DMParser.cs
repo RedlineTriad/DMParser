@@ -1,14 +1,17 @@
+using System.Linq.Expressions;
 using System.Linq;
 using System.Collections.Generic;
 using System.Dynamic;
 using Superpower;
 using Superpower.Parsers;
 using Superpower.Model;
+using System;
 
 namespace DMChem.Parser
 {
     public static class DMParser
     {
+        public static Dictionary<string, object> Defines = new Dictionary<string, object>();
         public static readonly TokenListParser<DMToken, string> SubPath =
             from _ in Token.EqualTo(DMToken.Slash)
             from chars in Token.EqualTo(DMToken.Identifier)
@@ -25,9 +28,9 @@ namespace DMChem.Parser
                 .Or(Token.EqualTo(DMToken.Identifier)
                     .Select(i => i.Span.ToString()));
 
-        public static readonly TokenListParser<DMToken, int> Integer =
+        public static readonly TokenListParser<DMToken, decimal> Number =
              Token.EqualTo(DMToken.NumericLiteral)
-                .Apply(Numerics.IntegerInt32);
+                .Apply(Numerics.DecimalDecimal);
 
         public static readonly TokenListParser<DMToken, bool> Boolean =
             Token.EqualTo(DMToken.BooleanLiteral).Select(x => bool.Parse(x.Span.ToString()));
@@ -38,28 +41,47 @@ namespace DMChem.Parser
         public static readonly TokenListParser<DMToken, string[]> Union =
             Identifier.AtLeastOnceDelimitedBy(Token.EqualTo(DMToken.Bar));
 
-        public static readonly TokenListParser<DMToken, Dictionary<string, object>> Dictionary =
+        public static readonly TokenListParser<DMToken, Dictionary<string, object>> DictList =
             from _ in Token.EqualTo(DMToken.ListKeyword)
             from __ in Token.EqualTo(DMToken.OpenParen)
             from pairs in Assignment.ManyDelimitedBy(Token.EqualTo(DMToken.Comma))
             from ___ in Token.EqualTo(DMToken.CloseParen)
             select pairs.ToDictionary(p => p.Key, p => p.Value);
 
-        public static readonly TokenListParser<DMToken, object> Expression =
+        public static readonly TokenListParser<DMToken, decimal> Multiply =
+            from a in Parse.Ref(() => Expr).Where(a => a is decimal)
+            from _ in Token.EqualTo(DMToken.Asterisk)
+            from b in Parse.Ref(() => Expr).Where(b => b is decimal)
+            select ((decimal)a) * ((decimal)b);
+
+        public static readonly TokenListParser<DMToken, object> StaticVariableReference =
+            from id in Identifier.Where(id => Defines.ContainsKey(id))
+            select Defines[id];
+
+        public static readonly TokenListParser<DMToken, object> Expr =
             from value in
-                Integer.Select(i => i as object)
-                .Or(String.Select(s => s as object))
-                .Or(Dictionary.Select(d => d as object))
-                .Or(Boolean.Select(d => d as object))
-                .Or(Union.Where(a => a.Length > 1).Try().Select(u => u as object))
+                Union.Where(a => a.Length > 1).Try().Select(u => u as object)
+                //.Or(Multiply.Try().Select(m => m as object))
+                .Or(StaticVariableReference)
                 .Or(Identifier.Select(r => r as object))
+                .Or(Number.Select(n => n as object))
+                .Or(String.Select(s => s as object))
+                .Or(DictList.Select(d => d as object))
+                .Or(Boolean.Select(d => d as object))
             select value;
 
         public static readonly TokenListParser<DMToken, KeyValuePair<string, object>> Assignment =
             from variableName in Identifier
             from _ in Token.EqualTo(DMToken.Equals)
-            from value in Expression
+            from value in Expr
             select new KeyValuePair<string, object>(variableName, value);
+
+        public static readonly TokenListParser<DMToken, KeyValuePair<string, object>> Define =
+            from _ in Token.EqualTo(DMToken.Hash)
+            from __ in Token.EqualTo(DMToken.Define)
+            from key in Token.EqualTo(DMToken.Identifier).Select(id => id.ToStringValue())
+            from value in Expr
+            select new KeyValuePair<string, object>(key, value);
 
         public static readonly TokenListParser<DMToken, KeyValuePair<string, dynamic>> Object =
             from path in ReferencePath
@@ -84,7 +106,7 @@ namespace DMChem.Parser
         public static readonly TokenListParser<DMToken, Dictionary<string, dynamic>> ObjectList =
             from _ in Token.EqualTo(DMToken.Eol).Many()
             from objs in (
-                from obj in Object
+                from obj in Object.Or(Define)
                 from __ in Token.EqualTo(DMToken.Eol).Or(Token.EqualTo(DMToken.LeadWhitespace)).Many()
                 select obj)
                 .Many().Select(KvpsToDic).AtEnd()
