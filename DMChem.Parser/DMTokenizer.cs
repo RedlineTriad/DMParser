@@ -80,6 +80,15 @@ namespace DMChem.Parser
                         next = next.Remainder.ConsumeChar();
                     }
                 }
+                if (next.Location.Length >= 4 && next.Location.First(2).ToString() == "/*")
+                {
+                    while (next.Location.First(2).ToString() != "*/")
+                    {
+                        next = next.Remainder.ConsumeChar();
+                    }
+                    next = next.Remainder.ConsumeChar();
+                    next = next.Remainder.ConsumeChar();
+                }
                 else if (char.IsDigit(next.Value) || next.Value == '-' || next.Value == '+')
                 {
                     var integer = Numerics.Integer(next.Location);

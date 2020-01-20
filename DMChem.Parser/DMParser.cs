@@ -48,10 +48,10 @@ namespace DMChem.Parser
         public static readonly TokenListParser<DMToken, object> Expression =
             from value in
                 Integer.Select(i => i as object)
-                .Or(Union.Select(u => u as object))
                 .Or(String.Select(s => s as object))
                 .Or(Dictionary.Select(d => d as object))
                 .Or(Boolean.Select(d => d as object))
+                .Or(Union.Where(a => a.Length > 1).Try().Select(u => u as object))
                 .Or(Identifier.Select(r => r as object))
             select value;
 
@@ -61,35 +61,44 @@ namespace DMChem.Parser
             from value in Expression
             select new KeyValuePair<string, object>(variableName, value);
 
-        public static readonly TokenListParser<DMToken, KeyValuePair<string, object>> LoneAssignment =
-            from _ in Token.EqualTo(DMToken.LeadWhitespace)
-            from ass in Assignment
-            from __ in Token.EqualTo(DMToken.Eol)
-            select ass;
-
-        public static readonly TokenListParser<DMToken, dynamic> Object =
+        public static readonly TokenListParser<DMToken, KeyValuePair<string, dynamic>> Object =
             from path in ReferencePath
             from _ in Token.EqualTo(DMToken.Eol)
-            from values in LoneAssignment.Where(kvp => (kvp.Key ?? kvp.Value) != null)
-                .Many().Select(a =>
+            from values in
+                Token.EqualTo(DMToken.LeadWhitespace)
+                .IgnoreThen(Assignment).Try()
+                .ManyDelimitedBy(Token.EqualTo(DMToken.Eol))
+                .Select(a =>
                 {
                     var eo = new ExpandoObject();
                     var eoColl = eo as IDictionary<string, object>;
-
-                    eoColl["path"] = path;
 
                     foreach (var item in a)
                     {
                         eoColl.Add(item);
                     }
-                    return eo as dynamic;
+                    return new KeyValuePair<string, dynamic>(path, eo as dynamic);
                 })
             select values;
 
-        public static readonly TokenListParser<DMToken, dynamic[]> ObjectList =
-            (from obj in Object
-             from _ in Token.EqualTo(DMToken.Eol).Many()
-             select obj).Many().AtEnd();
+        public static readonly TokenListParser<DMToken, Dictionary<string, dynamic>> ObjectList =
+            from _ in Token.EqualTo(DMToken.Eol).Many()
+            from objs in (
+                from obj in Object
+                from __ in Token.EqualTo(DMToken.Eol).Or(Token.EqualTo(DMToken.LeadWhitespace)).Many()
+                select obj)
+                .Many().Select(KvpsToDic).AtEnd()
+            select objs;
+
+        private static Dictionary<string, dynamic> KvpsToDic(KeyValuePair<string, dynamic>[] kvps)
+        {
+            var dic = new Dictionary<string, dynamic>();
+            foreach (var kvp in kvps)
+            {
+                dic.Add(kvp.Key, kvp.Value);
+            }
+            return dic;
+        }
 
         public static bool DynHas(dynamic dyn, string valName)
         {

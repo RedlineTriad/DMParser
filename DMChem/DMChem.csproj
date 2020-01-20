@@ -4,6 +4,10 @@
     <ProjectReference Include="..\DMChem.Parser\DMChem.Parser.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="yamldotnet" Version="8.1.0" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.1</TargetFramework>

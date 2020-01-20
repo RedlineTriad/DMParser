@@ -4,33 +4,66 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using DMChem.Parser;
+using YamlDotNet;
+using YamlDotNet.Serialization;
+using Superpower.Model;
+using System.Collections.Generic;
 
 namespace DMChem
 {
     class Program
     {
-        static readonly Uri recipeUri = new Uri("https://raw.githubusercontent.com/tgstation/tgstation/master/code/modules/reagents/chemistry/recipes/pyrotechnics.dm");
+        static readonly Uri baseURI = new Uri("https://raw.githubusercontent.com/tgstation/tgstation/master/code/modules/reagents/chemistry/recipes/");
+        static readonly string[] recipes = {
+            "cat2_medicines.dm",
+            "drugs.dm",
+            "medicine.dm",
+            "others.dm",
+            "pyrotechnics.dm",
+            "slime_extracts.dm",
+            "toxins.dm",
+            };
 
         static async Task Main(string[] args)
         {
+            var recipeUri = baseURI + recipes[0];
             var http = new HttpClient();
-            var recipeDM = await http.GetStringAsync(recipeUri);
-            var regex = new Regex(@"(?:\/[\w_]+)+\(.*?\).+?(?=\n\/datum)", RegexOptions.Singleline);
-            recipeDM = regex.Replace(recipeDM, "");
-
+            var serializer = new SerializerBuilder().Build();
             var tokenizer = new DMTokenizer();
-            var tokens = tokenizer.Tokenize(recipeDM);
-            var parsed = DMParser.ObjectList(tokens);
-            if (parsed.ErrorPosition.HasValue)
-            {
-                Console.WriteLine(parsed);
-                var errorLine = parsed.ErrorPosition.Line;
-                WriteSurrounding(recipeDM, errorLine, 3);
-            }
-            if (parsed.HasValue)
-            {
-                WriteReactions(parsed.Value);
-            }
+
+            await Task.WhenAll(recipes
+                .Select(r => new Uri(baseURI + r))
+                .Select(async uri => await http.GetStringAsync(uri))
+                .Select(async dmText => RemoveFunctions(await dmText))
+                .Select(async dmText => tokenizer.Tokenize(await dmText))
+                // .Select(async tokens =>
+                // {
+                //     foreach(var token in await tokens) {
+                //         Console.WriteLine($"{token.Position.Line} | {token.Kind.ToString().PadRight(15)} | {token.ToStringValue()}");
+                //     }
+                //     return await tokens;
+                // })
+                .Select(async tokens => DMParser.ObjectList(await tokens))
+                .Select(async obj =>
+                {
+                    var objs = await obj;
+                    if (objs.ErrorPosition.HasValue)
+                    {
+                        Console.WriteLine(objs);
+                        //var errorLine = objs.ErrorPosition.Line;
+                        //WriteSurrounding(objs, errorLine, 3);
+                    }
+                    return objs;
+                })
+                .Select(async objs => serializer.Serialize((await objs).Value))
+                .Select(async yaml => Console.WriteLine(await yaml))
+                ).ConfigureAwait(false);
+        }
+
+        private static string RemoveFunctions(string recipeDM)
+        {
+            var regex = new Regex(@"(?:\/[\w_]+)+\(.*?\)(?:(?!\n\/datum).)*", RegexOptions.Singleline);
+            return regex.Replace(recipeDM, "");
         }
 
         private static void WriteSurrounding(string text, int line, int range)
@@ -38,71 +71,6 @@ namespace DMChem
             var lines = text.Split('\n');
             var countedLines = lines.Zip(Enumerable.Range(1, lines.Length + 1), (a, b) => $"{b} | {a}");
             Console.WriteLine(string.Join('\n', countedLines.Skip(line - range).Take(range * 2 - 1)));
-        }
-
-        private static void WriteReactions(dynamic[] reactions)
-        {
-            var indent = 0;
-            foreach (var reaction in reactions)
-            {
-                Print($"{reaction.path}:");
-                indent++;
-
-                if (DMParser.DynHas(reaction, "name"))
-                {
-                    Print($"name: {reaction.name}");
-                }
-
-                if (DMParser.DynHas(reaction, "required_reagents"))
-                {
-                    Print("required_reagents:");
-                    indent++;
-                    foreach (var required in reaction.required_reagents)
-                    {
-                        Print($"{required.Key}: {required.Value}");
-                    }
-                    indent--;
-                }
-
-                if (DMParser.DynHas(reaction, "required_catalysts"))
-                {
-                    Print("required_catalysts:");
-                    indent++;
-                    foreach (var required in reaction.required_catalysts)
-                    {
-                        Print($"{required.Key}: {required.Value}");
-                    }
-                    indent--;
-                }
-
-                if (DMParser.DynHas(reaction, "required_temp"))
-                {
-                    Print("temperature:");
-                    indent++;
-                    var cold = DMParser.DynHas(reaction, "is_cold_recipe");
-                    Print($"{(cold ? "min" : "max")}: {reaction.required_temp}");
-                    indent--;
-                }
-
-                if (DMParser.DynHas(reaction, "results"))
-                {
-                    Print("results:");
-                    indent++;
-                    foreach (var result in reaction.results)
-                    {
-                        Print($"{result.Key}: {result.Value}");
-                    }
-                    indent--;
-                }
-
-                indent--;
-                Console.WriteLine();
-            }
-
-            void Print(string text)
-            {
-                Console.WriteLine(new string(' ', indent * 2) + text);
-            }
         }
     }
 }
