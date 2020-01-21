@@ -16,14 +16,14 @@ namespace DMChem
         static readonly Uri baseURI = new Uri("https://raw.githubusercontent.com/tgstation/tgstation/master/code/modules/reagents/chemistry/reagents/");
         static readonly string[] recipes = {
             "alcohol_reagents.dm",
-            //"cat2_medicine_reagents.dm",
-            //"drink_reagents.dm",
-            //"drug_reagents.dm",
-            //"food_reagents.dm",
-            //"medicine_reagents.dm",
-            //"other_reagents.dm",
-            //"pyrotechnic_reagents.dm",
-            //"toxin_reagents.dm",
+            // "cat2_medicine_reagents.dm",
+            // "drink_reagents.dm",
+            // "drug_reagents.dm",
+            // "food_reagents.dm",
+            // "medicine_reagents.dm",
+            // "other_reagents.dm",
+            // "pyrotechnic_reagents.dm",
+            // "toxin_reagents.dm",
             };
 
         static async Task Main(string[] args)
@@ -33,6 +33,9 @@ namespace DMChem
             var serializer = new SerializerBuilder().DisableAliases().Build();
             var tokenizer = new DMTokenizer();
             DMParser.Defines.Add("REAGENTS_METABOLISM", 0.4m);
+            DMParser.Defines.Add("REM", 0.1m);
+            DMParser.Defines.Add("T0C", 273.15m);
+            DMParser.Defines.Add("BLOOD_VOLUME_NORMAL", 560m);
 
             await Task.WhenAll(recipes
                 .Select(r => new Uri(baseURI + r))
@@ -40,13 +43,13 @@ namespace DMChem
                 // .Select(async dmText => string.Join('\n',(await dmText).Split('\n').Take(1865)))
                 .Select(async dmText => RemoveFunctions(await dmText))
                 .Select(async dmText => tokenizer.Tokenize(await dmText))
-                // .Select(async tokens =>
-                // {
-                //     foreach(var token in await tokens) {
-                //         Console.WriteLine($"{token.Position.Line}:{token.Position.Column} | {token.Kind.ToString().PadRight(15)} | {token.ToStringValue()}");
-                //     }
-                //     return await tokens;
-                // })
+                .Select(async tokens =>
+                {
+                    foreach(var token in await tokens) {
+                        Console.WriteLine($"{token.Position.Line}:{token.Position.Column} | {token.Kind.ToString().PadRight(15)} | {token.ToStringValue()}");
+                    }
+                    return await tokens;
+                })
                 .Select(async tokens => DMParser.ObjectList(await tokens))
                 .Select(async obj =>
                 {

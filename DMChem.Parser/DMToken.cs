@@ -64,6 +64,8 @@ namespace DMChem.Parser {
         [Token(Category = "keyword", Example = "#")]
         Define,
         [Token(Category = "keyword", Example = "define")]
+        UnDef,
+        [Token(Category = "keyword", Example = "undef")]
         PlusPlus,
         [Token(Category = "keyword", Example = "list")]
         ListKeyword,

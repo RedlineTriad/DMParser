@@ -32,6 +32,7 @@ namespace DMChem.Parser
         private static readonly Dictionary<string, DMToken> keywords = new Dictionary<string, DMToken>
         {
             ["define"] = DMToken.Define,
+            ["undef"] = DMToken.UnDef,
             ["list"] = DMToken.ListKeyword,
             ["for"] = DMToken.ForKeyword,
             ["in"] = DMToken.InKeyword,
@@ -92,7 +93,7 @@ namespace DMChem.Parser
                     next = next.Remainder.ConsumeChar();
                     next = next.Remainder.ConsumeChar();
                 }
-                else if (char.IsDigit(next.Value) || next.Value == '-' || next.Value == '+')
+                else if (Numerics.Decimal(next.Location).HasValue)
                 {
                     var integer = Numerics.Decimal(next.Location);
                     next = integer.Remainder.ConsumeChar();

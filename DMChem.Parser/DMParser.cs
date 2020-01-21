@@ -14,6 +14,11 @@ namespace DMChem.Parser
     {
         public static Dictionary<string, object> Defines = new Dictionary<string, object>();
 
+        public static readonly TokenListParser<DMToken, Token<DMToken>[]> NLWhite =
+            (Token.EqualTo(DMToken.Eol)
+            .Or(Token.EqualTo(DMToken.LeadWhitespace)))
+            .Many();
+
         public static readonly TokenListParser<DMToken, string> SubPath =
             from _ in Token.EqualTo(DMToken.Slash)
             from chars in Token.EqualTo(DMToken.Identifier)
@@ -46,7 +51,10 @@ namespace DMChem.Parser
         public static readonly TokenListParser<DMToken, Color> Rgb =
             from _ in Token.EqualTo(DMToken.RgbKeyword)
             from __ in Token.EqualTo(DMToken.OpenParen)
-            from rgb in Number.ManyDelimitedBy(Token.EqualTo(DMToken.Comma)).Where(a => a.Length == 3).Select(a => a.Select(c => (int)c).ToArray())
+            from rgb in 
+                Number.ManyDelimitedBy(Token.EqualTo(DMToken.Comma))
+                .Where(a => a.Length == 3)
+                .Select(a => a.Select(c => (int)c).ToArray())
             from ___ in Token.EqualTo(DMToken.CloseParen)
             select Color.FromArgb(rgb[0], rgb[1], rgb[2]);
 
@@ -55,6 +63,10 @@ namespace DMChem.Parser
             .Select(s => s.Span.Skip(1).First(s.Span.Length - 2).ToStringValue())
             .Where(s => s.StartsWith("#"))
             .Select(ColorTranslator.FromHtml);
+
+        public static readonly TokenListParser<DMToken, object> StaticVariableReference =
+            from id in Identifier.Where(id => Defines.ContainsKey(id))
+            select Defines[id];
 
         public static readonly TokenListParser<DMToken, KeyValuePair<object, object>> DictPair =
             from key in Parse.Ref(() => Expr)
@@ -65,33 +77,54 @@ namespace DMChem.Parser
         public static readonly TokenListParser<DMToken, Dictionary<object, object>> DictList =
             from _ in Token.EqualTo(DMToken.ListKeyword)
             from __ in Token.EqualTo(DMToken.OpenParen)
-            from pairs in DictPair.ManyDelimitedBy(Token.EqualTo(DMToken.Comma))
+            from pairs in DictPair.ManyDelimitedBy(Token.EqualTo(DMToken.Comma).IgnoreSurrounding(NLWhite))
             from ___ in Token.EqualTo(DMToken.CloseParen)
             select pairs.ToDictionary(p => p.Key, p => p.Value);
 
+        public static readonly TokenListParser<DMToken, object[]> List =
+            from _ in Token.EqualTo(DMToken.ListKeyword)
+            from __ in Token.EqualTo(DMToken.OpenParen)
+            from values in Parse.Ref(() => Expr).ManyDelimitedBy(Token.EqualTo(DMToken.Comma).IgnoreSurrounding(NLWhite))
+            from ___ in Token.EqualTo(DMToken.CloseParen)
+            select values;
+
         public static readonly TokenListParser<DMToken, decimal> Multiply =
-            from a in Number
+            from a in Parse.Ref(() => TermExpr).Where(a => a is decimal).Select(a => (decimal)a)
             from _ in Token.EqualTo(DMToken.Asterisk)
-            from b in Number.Or(Parse.Ref(() => Expr).Where(b => b is decimal).Select(b => (decimal)b))
+            from b in Parse.Ref(() => Expr).Where(b => b is decimal).Select(b => (decimal)b)
             select a * b;
 
-        public static readonly TokenListParser<DMToken, object> StaticVariableReference =
-            from id in Identifier.Where(id => Defines.ContainsKey(id))
-            select Defines[id];
+        public static readonly TokenListParser<DMToken, decimal> ParenSubtract =
+            from _ in Token.EqualTo(DMToken.OpenParen)
+            from a in Parse.Ref(() => Expr).Where(a => a is decimal).Select(a => (decimal)a)
+            from __ in Token.EqualTo(DMToken.Minus)
+            from b in Parse.Ref(() => Expr).Where(b => b is decimal).Select(b => (decimal)b)
+            from ___ in Token.EqualTo(DMToken.CloseParen)
+            select a - b;
+
+        public static readonly TokenListParser<DMToken, decimal> Subtract =
+            from a in Parse.Ref(() => TermExpr).Where(a => a is decimal).Select(a => (decimal)a)
+            from _ in Token.EqualTo(DMToken.Minus)
+            from b in Parse.Ref(() => Expr).Where(b => b is decimal).Select(b => (decimal)b)
+            select a - b;
+
+        public static readonly TokenListParser<DMToken, object> TermExpr =
+            Rgb.Select(c => c as object)
+            .Or(StaticVariableReference)
+            .Or(Identifier.Select(r => r as object))
+            .Or(Number.Select(n => n as object))
+            .Or(HexColor.Select(c => c as object))
+            .Or(String.Select(s => s as object))
+            .Or(Boolean.Select(d => d as object));
 
         public static readonly TokenListParser<DMToken, object> Expr =
-            from value in
-                Rgb.Select(c => c as object)
-                .Or(Union.Where(a => a.Length > 1).Try().Select(u => u as object))
-                .Or(Multiply.Try().Select(m => m as object))
-                .Or(StaticVariableReference)
-                .Or(Identifier.Select(r => r as object))
-                .Or(Number.Select(n => n as object))
-                .Or(HexColor.Select(c => c as object))
-                .Or(String.Select(s => s as object))
-                .Or(DictList.Select(d => d as object))
-                .Or(Boolean.Select(d => d as object))
-            select value;
+            Union.Where(a => a.Length > 1).Try().Select(u => u as object)
+            .Or(Multiply.Try().Select(m => m as object))
+            .Or(Subtract.Try().Select(v => v as object))
+            .Or(ParenSubtract.Try().Select(v => v as object))
+            .Or(DictList.Try().Select(d => d as object))
+            .Or(List.Try().Select(l => l as object))
+            .Or(TermExpr);
 
         public static readonly TokenListParser<DMToken, KeyValuePair<string, object>> Assignment =
             from variableName in Identifier
@@ -103,14 +136,35 @@ namespace DMChem.Parser
             from _ in Token.EqualTo(DMToken.Hash)
             from __ in Token.EqualTo(DMToken.Define)
             from key in Token.EqualTo(DMToken.Identifier).Select(id => id.ToStringValue())
-            from value in Expr
+            from value in Expr.Select(value => {
+                Defines.Add(key, value);
+                return value;
+            })
+            from ___ in Token.EqualTo(DMToken.Eol)
             select new KeyValuePair<string, object>(key, value);
+
+        public static readonly TokenListParser<DMToken, string> UnDef =
+            from _ in Token.EqualTo(DMToken.Hash)
+            from __ in Token.EqualTo(DMToken.UnDef)
+            from key in
+                Token.EqualTo(DMToken.Identifier)
+                .Select(id => id.ToStringValue())
+                .Select(key => {
+                    Defines.Remove(key);
+                    return key;
+                })
+            from ___ in Token.EqualTo(DMToken.Eol)
+            select key;
+
+        public static readonly TokenListParser<DMToken, object> PreProc =
+            Define.Try().Select(x => x as object)
+            .Or(UnDef.Select(x => x as object))
+            .IgnoreSurrounding(NLWhite);
 
         public static readonly TokenListParser<DMToken, KeyValuePair<string, dynamic>> Object =
             from path in ReferencePath
-            from _ in Token.EqualTo(DMToken.Eol)
             from values in
-                Token.EqualTo(DMToken.LeadWhitespace)
+                NLWhite
                 .IgnoreThen(Assignment).Try()
                 .ManyDelimitedBy(Token.EqualTo(DMToken.Eol))
                 .Select(a =>
@@ -127,13 +181,26 @@ namespace DMChem.Parser
             select values;
 
         public static readonly TokenListParser<DMToken, Dictionary<string, dynamic>> ObjectList =
-            from _ in Token.EqualTo(DMToken.Eol).Many()
+            from _ in NLWhite
             from objs in (
-                from obj in Object.Or(Define)
-                from __ in Token.EqualTo(DMToken.Eol).Or(Token.EqualTo(DMToken.LeadWhitespace)).Many()
+                from obj in PreProc.Many().IgnoreThen(Object)
+                from __ in NLWhite
                 select obj)
                 .Many().Select(KvpsToDic).AtEnd()
             select objs;
+
+
+        private static TokenListParser<TKind, T> IgnoreSurrounding<TKind, T, U>(this TokenListParser<TKind, T> parser, TokenListParser<TKind, U> ignore)
+        {
+            if (parser == null) throw new ArgumentNullException(nameof(parser));
+            if (ignore == null) throw new ArgumentNullException(nameof(ignore));
+
+            return
+                from _ in ignore
+                from val in parser
+                from __ in ignore
+                select val;
+        }
 
         private static Dictionary<string, dynamic> KvpsToDic(KeyValuePair<string, dynamic>[] kvps)
         {
