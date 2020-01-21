@@ -7,5 +7,6 @@
   <ItemGroup>
     <PackageReference Include="Superpower" Version="2.3.0" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+    <PackageReference Include="System.Drawing.Common" Version="4.7.0" />
   </ItemGroup>
 </Project>

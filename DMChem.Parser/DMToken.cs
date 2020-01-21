@@ -80,6 +80,8 @@ namespace DMChem.Parser {
         [Token(Category = "keyword", Example = "new")]
         NewKeyword,
         [Token(Category = "keyword", Example = "return")]
+        RgbKeyword,
+        [Token(Category = "keyword", Example = "rgb")]
         ReturnKeyword,
         [Token(Category = "seperator", Example = ",")]
         Comma,

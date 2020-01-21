@@ -40,6 +40,7 @@ namespace DMChem.Parser
             ["else"] = DMToken.ElseKeyword,
             ["new"] = DMToken.NewKeyword,
             ["return"] = DMToken.ReturnKeyword,
+            ["rgb"] = DMToken.RgbKeyword,
             ["TRUE"] = DMToken.BooleanLiteral,
             ["FALSE"] = DMToken.BooleanLiteral,
             ["=="] = DMToken.EqualsEquals,
@@ -77,12 +78,12 @@ namespace DMChem.Parser
                 }
                 if (next.Location.Length >= 2 && next.Location.First(2).ToString() == "//")
                 {
-                    while (next.Value != '\n')
+                    while (next.HasValue && next.Value != '\n')
                     {
                         next = next.Remainder.ConsumeChar();
                     }
                 }
-                if (next.Location.Length >= 4 && next.Location.First(2).ToString() == "/*")
+                else if (next.Location.Length >= 4 && next.Location.First(2).ToString() == "/*")
                 {
                     while (next.Location.First(2).ToString() != "*/")
                     {
@@ -123,7 +124,7 @@ namespace DMChem.Parser
                     lastFail = next.Location;
                 }
                 SkipWhiteSpace(ref next, DMToken.TrailWhitespace, out _);
-                if (next.Value == '\n')
+                if (next.HasValue && next.Value == '\n')
                 {
                     yield return Result.Value(DMToken.Eol, next.Location, next.Remainder);
                     while (next.HasValue && next.Value == '\n')
@@ -140,7 +141,7 @@ namespace DMChem.Parser
             {
                 var identifierStart = next.Location;
                 bool firstLetter = false;
-                while (char.IsLetter(next.Value) || next.Value == '_' || (firstLetter && char.IsDigit(next.Value)))
+                while (next.HasValue && (char.IsLetter(next.Value) || next.Value == '_' || (firstLetter && char.IsDigit(next.Value))))
                 {
                     next = next.Remainder.ConsumeChar();
                     firstLetter = true;
@@ -154,6 +155,12 @@ namespace DMChem.Parser
 
         private static bool TryKeyword(ref Result<char> next, out Result<DMToken> value)
         {
+            var abs = next.Location.Position.Absolute;
+            if (abs != 0 && next.Location.Source[abs - 1] == '/')
+            {
+                value = default;
+                return false;
+            }
             var remainingLength = next.Location.Length;
             var maxWordLength = Math.Min(remainingLength, keywords.Max(keyword => keyword.Key.Length));
             var fetchLength = Math.Min(remainingLength, maxWordLength + 1);
@@ -201,10 +208,10 @@ namespace DMChem.Parser
 
         private static bool SkipWhiteSpace(ref Result<char> next, DMToken token, out Result<DMToken> value)
         {
-            if (whitespace.Contains(next.Value))
+            if (next.HasValue && whitespace.Contains(next.Value))
             {
                 var start = next.Location;
-                while (whitespace.Contains(next.Value))
+                while (next.HasValue && whitespace.Contains(next.Value))
                 {
                     next = next.Remainder.ConsumeChar();
                 }

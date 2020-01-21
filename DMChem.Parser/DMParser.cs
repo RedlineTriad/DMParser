@@ -6,12 +6,14 @@ using Superpower;
 using Superpower.Parsers;
 using Superpower.Model;
 using System;
+using System.Drawing;
 
 namespace DMChem.Parser
 {
     public static class DMParser
     {
         public static Dictionary<string, object> Defines = new Dictionary<string, object>();
+
         public static readonly TokenListParser<DMToken, string> SubPath =
             from _ in Token.EqualTo(DMToken.Slash)
             from chars in Token.EqualTo(DMToken.Identifier)
@@ -41,18 +43,37 @@ namespace DMChem.Parser
         public static readonly TokenListParser<DMToken, string[]> Union =
             Identifier.AtLeastOnceDelimitedBy(Token.EqualTo(DMToken.Bar));
 
-        public static readonly TokenListParser<DMToken, Dictionary<string, object>> DictList =
+        public static readonly TokenListParser<DMToken, Color> Rgb =
+            from _ in Token.EqualTo(DMToken.RgbKeyword)
+            from __ in Token.EqualTo(DMToken.OpenParen)
+            from rgb in Number.ManyDelimitedBy(Token.EqualTo(DMToken.Comma)).Where(a => a.Length == 3).Select(a => a.Select(c => (int)c).ToArray())
+            from ___ in Token.EqualTo(DMToken.CloseParen)
+            select Color.FromArgb(rgb[0], rgb[1], rgb[2]);
+
+        public static readonly TokenListParser<DMToken, Color> HexColor =
+            Token.EqualTo(DMToken.StringLiteral)
+            .Select(s => s.Span.Skip(1).First(s.Span.Length - 2).ToStringValue())
+            .Where(s => s.StartsWith("#"))
+            .Select(ColorTranslator.FromHtml);
+
+        public static readonly TokenListParser<DMToken, KeyValuePair<object, object>> DictPair =
+            from key in Parse.Ref(() => Expr)
+            from _ in Token.EqualTo(DMToken.Equals)
+            from value in Parse.Ref(() => Expr)
+            select new KeyValuePair<object, object>(key, value);
+
+        public static readonly TokenListParser<DMToken, Dictionary<object, object>> DictList =
             from _ in Token.EqualTo(DMToken.ListKeyword)
             from __ in Token.EqualTo(DMToken.OpenParen)
-            from pairs in Assignment.ManyDelimitedBy(Token.EqualTo(DMToken.Comma))
+            from pairs in DictPair.ManyDelimitedBy(Token.EqualTo(DMToken.Comma))
             from ___ in Token.EqualTo(DMToken.CloseParen)
             select pairs.ToDictionary(p => p.Key, p => p.Value);
 
         public static readonly TokenListParser<DMToken, decimal> Multiply =
-            from a in Parse.Ref(() => Expr).Where(a => a is decimal)
+            from a in Number
             from _ in Token.EqualTo(DMToken.Asterisk)
-            from b in Parse.Ref(() => Expr).Where(b => b is decimal)
-            select ((decimal)a) * ((decimal)b);
+            from b in Number.Or(Parse.Ref(() => Expr).Where(b => b is decimal).Select(b => (decimal)b))
+            select a * b;
 
         public static readonly TokenListParser<DMToken, object> StaticVariableReference =
             from id in Identifier.Where(id => Defines.ContainsKey(id))
@@ -60,11 +81,13 @@ namespace DMChem.Parser
 
         public static readonly TokenListParser<DMToken, object> Expr =
             from value in
-                Union.Where(a => a.Length > 1).Try().Select(u => u as object)
-                //.Or(Multiply.Try().Select(m => m as object))
+                Rgb.Select(c => c as object)
+                .Or(Union.Where(a => a.Length > 1).Try().Select(u => u as object))
+                .Or(Multiply.Try().Select(m => m as object))
                 .Or(StaticVariableReference)
                 .Or(Identifier.Select(r => r as object))
                 .Or(Number.Select(n => n as object))
+                .Or(HexColor.Select(c => c as object))
                 .Or(String.Select(s => s as object))
                 .Or(DictList.Select(d => d as object))
                 .Or(Boolean.Select(d => d as object))

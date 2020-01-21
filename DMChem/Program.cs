@@ -30,21 +30,23 @@ namespace DMChem
         {
             var recipeUri = baseURI + recipes[0];
             var http = new HttpClient();
-            var serializer = new SerializerBuilder().Build();
+            var serializer = new SerializerBuilder().DisableAliases().Build();
             var tokenizer = new DMTokenizer();
+            DMParser.Defines.Add("REAGENTS_METABOLISM", 0.4m);
 
             await Task.WhenAll(recipes
                 .Select(r => new Uri(baseURI + r))
                 .Select(async uri => await http.GetStringAsync(uri))
+                // .Select(async dmText => string.Join('\n',(await dmText).Split('\n').Take(1865)))
                 .Select(async dmText => RemoveFunctions(await dmText))
                 .Select(async dmText => tokenizer.Tokenize(await dmText))
-                .Select(async tokens =>
-                {
-                    foreach(var token in await tokens) {
-                        Console.WriteLine($"{token.Position.Line} | {token.Kind.ToString().PadRight(15)} | {token.ToStringValue()}");
-                    }
-                    return await tokens;
-                })
+                // .Select(async tokens =>
+                // {
+                //     foreach(var token in await tokens) {
+                //         Console.WriteLine($"{token.Position.Line}:{token.Position.Column} | {token.Kind.ToString().PadRight(15)} | {token.ToStringValue()}");
+                //     }
+                //     return await tokens;
+                // })
                 .Select(async tokens => DMParser.ObjectList(await tokens))
                 .Select(async obj =>
                 {
@@ -66,13 +68,6 @@ namespace DMChem
         {
             var regex = new Regex(@"(?:\/[\w_]+)+\(.*?\)(?:(?!\n\/datum).)*", RegexOptions.Singleline);
             return regex.Replace(recipeDM, "");
-        }
-
-        private static void WriteSurrounding(string text, int line, int range)
-        {
-            var lines = text.Split('\n');
-            var countedLines = lines.Zip(Enumerable.Range(1, lines.Length + 1), (a, b) => $"{b} | {a}");
-            Console.WriteLine(string.Join('\n', countedLines.Skip(line - range).Take(range * 2 - 1)));
         }
     }
 }
