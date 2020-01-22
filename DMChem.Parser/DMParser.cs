@@ -51,7 +51,7 @@ namespace DMChem.Parser
         public static readonly TokenListParser<DMToken, Color> Rgb =
             from _ in Token.EqualTo(DMToken.RgbKeyword)
             from __ in Token.EqualTo(DMToken.OpenParen)
-            from rgb in 
+            from rgb in
                 Number.ManyDelimitedBy(Token.EqualTo(DMToken.Comma))
                 .Where(a => a.Length == 3)
                 .Select(a => a.Select(c => (int)c).ToArray())
@@ -94,13 +94,11 @@ namespace DMChem.Parser
             from b in Parse.Ref(() => Expr).Where(b => b is decimal).Select(b => (decimal)b)
             select a * b;
 
-        public static readonly TokenListParser<DMToken, decimal> ParenSubtract =
+        public static readonly TokenListParser<DMToken, object> Parenthesized =
             from _ in Token.EqualTo(DMToken.OpenParen)
-            from a in Parse.Ref(() => Expr).Where(a => a is decimal).Select(a => (decimal)a)
-            from __ in Token.EqualTo(DMToken.Minus)
-            from b in Parse.Ref(() => Expr).Where(b => b is decimal).Select(b => (decimal)b)
+            from v in Parse.Ref(() => Expr)
             from ___ in Token.EqualTo(DMToken.CloseParen)
-            select a - b;
+            select v;
 
         public static readonly TokenListParser<DMToken, decimal> Subtract =
             from a in Parse.Ref(() => TermExpr).Where(a => a is decimal).Select(a => (decimal)a)
@@ -113,15 +111,15 @@ namespace DMChem.Parser
             .Or(StaticVariableReference)
             .Or(Identifier.Select(r => r as object))
             .Or(Number.Select(n => n as object))
-            .Or(HexColor.Select(c => c as object))
+            .Or(HexColor.Try().Select(c => c as object))
             .Or(String.Select(s => s as object))
             .Or(Boolean.Select(d => d as object));
 
         public static readonly TokenListParser<DMToken, object> Expr =
             Union.Where(a => a.Length > 1).Try().Select(u => u as object)
             .Or(Multiply.Try().Select(m => m as object))
+            .Or(Parenthesized.Try())
             .Or(Subtract.Try().Select(v => v as object))
-            .Or(ParenSubtract.Try().Select(v => v as object))
             .Or(DictList.Try().Select(d => d as object))
             .Or(List.Try().Select(l => l as object))
             .Or(TermExpr);
