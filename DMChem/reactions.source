@@ -1,0 +1,8 @@
+https://raw.githubusercontent.com/tgstation/tgstation/15825997b86bc348ff3d0cd1b7d80edc489da4be/code/modules/reagents/chemistry/recipes/
+drugs.dm
+medicine.dm
+others.dm
+pyrotechnics.dm
+slime_extracts.dm
+#special.dm
+toxins.dm

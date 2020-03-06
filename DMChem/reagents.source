@@ -1,0 +1,9 @@
+https://raw.githubusercontent.com/tgstation/tgstation/15825997b86bc348ff3d0cd1b7d80edc489da4be/code/modules/reagents/chemistry/reagents/
+alcohol_reagents.dm
+drink_reagents.dm
+drug_reagents.dm
+food_reagents.dm
+medicine_reagents.dm
+other_reagents.dm
+pyrotechnic_reagents.dm
+toxin_reagents.dm

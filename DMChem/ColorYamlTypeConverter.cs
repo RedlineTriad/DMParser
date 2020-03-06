@@ -21,19 +21,7 @@ namespace DMChem
         public void WriteYaml(IEmitter emitter, object value, Type type)
         {
             var node = (Color)value;
-            emitter.Emit(new MappingStart(null, null, false, MappingStyle.Block));
-            emitter.Emit(new Scalar(null, nameof(node.R)));
-            emitter.Emit(new Scalar(null, node.R.ToString()));
-            emitter.Emit(new Scalar(null, nameof(node.G)));
-            emitter.Emit(new Scalar(null, node.G.ToString()));
-            emitter.Emit(new Scalar(null, nameof(node.B)));
-            emitter.Emit(new Scalar(null, node.B.ToString()));
-            if (node.A != byte.MaxValue)
-            {
-                emitter.Emit(new Scalar(null, nameof(node.A)));
-                emitter.Emit(new Scalar(null, node.A.ToString()));
-            }
-            emitter.Emit(new MappingEnd());
+            emitter.Emit(new Scalar(null, ColorTranslator.ToHtml(node)));
         }
     }
 }

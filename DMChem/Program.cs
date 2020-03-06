@@ -8,27 +8,15 @@ using YamlDotNet;
 using YamlDotNet.Serialization;
 using Superpower.Model;
 using System.Collections.Generic;
+using System.IO;
 
 namespace DMChem
 {
     class Program
     {
-        static readonly Uri baseURI = new Uri("https://raw.githubusercontent.com/tgstation/tgstation/master/code/modules/reagents/chemistry/reagents/");
-        static readonly string[] recipes = {
-            "alcohol_reagents.dm",
-            "cat2_medicine_reagents.dm",
-            "drink_reagents.dm",
-            "drug_reagents.dm",
-            "food_reagents.dm",
-            "medicine_reagents.dm",
-            "other_reagents.dm",
-            "pyrotechnic_reagents.dm",
-            "toxin_reagents.dm",
-            };
-
         static async Task Main(string[] args)
         {
-            var recipeUri = baseURI + recipes[0];
+            var lines = await File.ReadAllLinesAsync(args[0]);
             var http = new HttpClient();
             var serializer = new SerializerBuilder()
                 .DisableAliases()
@@ -40,10 +28,10 @@ namespace DMChem
             DMParser.Defines.Add("T0C", 273.15m);
             DMParser.Defines.Add("BLOOD_VOLUME_NORMAL", 560m);
 
-            await Task.WhenAll(recipes
-                .Select(r => new Uri(baseURI + r))
+            await Task.WhenAll(lines.Skip(1)
+                .Where(l => !l.StartsWith("#"))
+                .Select(r => new Uri(lines[0] + r))
                 .Select(async uri => await http.GetStringAsync(uri))
-                // .Select(async dmText => string.Join('\n',(await dmText).Split('\n').Take(1865)))
                 .Select(async dmText => RemoveFunctions(await dmText))
                 .Select(async dmText => tokenizer.Tokenize(await dmText))
                 // .Select(async tokens =>
